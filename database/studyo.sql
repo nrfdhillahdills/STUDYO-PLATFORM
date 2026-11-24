@@ -96,3 +96,5 @@ INSERT INTO contents (course_id, title, body, order_index) VALUES
 (1, 'Salam dan Perkenalan Diri (자기소개)', '<p>Pelajari perbedaan tingkat kesopanan formal (<em>-mnida</em>) dan sopan standar (<em>-yo</em>) saat memperkenalkan diri.</p>', 2),
 (2, 'Menulis Email Bisnis yang Efektif', '<p>Struktur pembukaan, inti pesan, dan penutup email profesional agar terdengar sopan dan jelas.</p>', 1),
 (3, 'Strategi Dasar Structure & Written Expression', '<p>Mengidentifikasi <strong>Subject-Verb Agreement</strong> dan penggunaan <em>tenses</em> yang sering muncul dalam ujian.</p>', 1);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT NULL;
