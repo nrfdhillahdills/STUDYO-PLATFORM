@@ -87,3 +87,51 @@ body {
 .animate-clay-float-delayed {
   animation: clayFloat 5.2s ease-in-out 1.2s infinite;
 }
+
+/* Styling konten materi hasil Rich Text Editor */
+.rich-content h1 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 1rem 0 0.5rem;
+  color: #182338;
+}
+.rich-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.9rem 0 0.4rem;
+  color: #182338;
+}
+.rich-content p {
+  margin-bottom: 0.75rem;
+  line-height: 1.75;
+}
+.rich-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.rich-content ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.rich-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+.rich-content th,
+.rich-content td {
+  border: 1px solid #DED7C8;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+.rich-content th {
+  background-color: #FBE48B;
+  font-weight: 700;
+}
+.rich-content img {
+  max-width: 100%;
+  border-radius: 16px;
+  margin: 0.75rem 0;
+}
