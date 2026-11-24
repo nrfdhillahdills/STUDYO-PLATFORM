@@ -52,7 +52,7 @@ export default async function Navbar() {
           )}
         </div>
 
-        {/* Tombol Auth / Info Akun */}
+        {/* Tombol Auth / Info Akun dengan Avatar */}
         <div className="flex items-center gap-2.5">
           {!user ? (
             <>
@@ -73,9 +73,19 @@ export default async function Navbar() {
             <div className="flex items-center gap-3">
               <Link
                 href="/profile"
-                className="hidden sm:flex items-center gap-2 bg-[#233250] px-3.5 py-1.5 rounded-full border border-[#344973]"
+                className="hidden sm:flex items-center gap-2 bg-[#233250] hover:bg-[#2B3D61] px-3 py-1.5 rounded-full border border-[#344973] transition"
               >
-                <span className="w-2 h-2 rounded-full bg-[#FBE48B]" />
+                {user.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={user.username}
+                    className="w-6 h-6 rounded-full object-cover border border-[#FBE48B]"
+                  />
+                ) : (
+                  <span className="w-6 h-6 rounded-full bg-[#FBE48B] text-[#182338] flex items-center justify-center text-[11px] font-black">
+                    {user.username.charAt(0).toUpperCase()}
+                  </span>
+                )}
                 <span className="text-xs font-bold text-white">
                   {user.username}
                 </span>
