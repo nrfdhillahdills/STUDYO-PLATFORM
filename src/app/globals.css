@@ -1,20 +1,89 @@
 @import "tailwindcss";
 
 :root {
-  --bg-main: #FAF9FC;
-  --surface-card: #FFFFFF;
-  --border-soft: #E5DFF0;
-  --lilac-soft: #EFEAFB;
-  --lilac-main: #8B72BE;
-  --lilac-hover: #7359A6;
-  --pistachio-soft: #E7F3E2;
-  --pistachio-main: #78B159;
-  --pistachio-hover: #639947;
-  --text-primary: #25202E;
-  --text-muted: #665E75;
+  --bg-canvas: #FAF8F2;
+  --navy-deep: #182338;
+  --navy-card: #22304C;
+  --yellow-soft: #FBE48B;
+  --yellow-cream: #FFF8DC;
+  --yellow-badge: #F6D55C;
+  --text-navy: #182338;
+  --text-muted: #5A657A;
 }
 
 body {
-  background-color: var(--bg-main);
-  color: var(--text-primary);
+  background-color: var(--bg-canvas);
+  color: var(--text-navy);
+}
+
+/* Efek 3D Matte Claymorphism */
+.clay-card {
+  background: #FFFFFF;
+  border-radius: 28px;
+  border: 2px solid #EFECE4;
+  box-shadow:
+    0 14px 28px -8px rgba(24, 35, 56, 0.10),
+    inset 0 4px 8px rgba(255, 255, 255, 0.95),
+    inset 0 -4px 10px rgba(24, 35, 56, 0.05);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.clay-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 20px 34px -8px rgba(24, 35, 56, 0.15),
+    inset 0 4px 8px rgba(255, 255, 255, 1),
+    inset 0 -4px 10px rgba(24, 35, 56, 0.06);
+}
+
+.clay-navy {
+  background: #182338;
+  color: #FFFFFF;
+  border-radius: 32px;
+  box-shadow:
+    0 18px 34px -10px rgba(24, 35, 56, 0.35),
+    inset 0 4px 10px rgba(255, 255, 255, 0.14),
+    inset 0 -6px 12px rgba(9, 14, 24, 0.55);
+}
+
+.clay-yellow {
+  background: #FBE48B;
+  color: #182338;
+  border-radius: 24px;
+  box-shadow:
+    0 10px 20px -6px rgba(217, 179, 54, 0.35),
+    inset 0 4px 8px rgba(255, 252, 235, 0.85),
+    inset 0 -4px 8px rgba(201, 158, 36, 0.28);
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.clay-yellow:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.03);
+}
+
+.clay-pill {
+  border-radius: 9999px;
+  box-shadow:
+    0 6px 14px -4px rgba(24, 35, 56, 0.10),
+    inset 0 3px 6px rgba(255, 255, 255, 0.8),
+    inset 0 -3px 6px rgba(24, 35, 56, 0.06);
+}
+
+/* Animasi mengambang halus untuk ilustrasi 3D clay */
+@keyframes clayFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(1.5deg);
+  }
+}
+
+.animate-clay-float {
+  animation: clayFloat 4.5s ease-in-out infinite;
+}
+
+.animate-clay-float-delayed {
+  animation: clayFloat 5.2s ease-in-out 1.2s infinite;
 }
