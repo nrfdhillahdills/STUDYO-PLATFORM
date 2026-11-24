@@ -12,9 +12,8 @@ export async function getCurrentUser() {
 
     const sessionData = JSON.parse(sessionCookie.value);
 
-    // Ambil data terbaru dari PostgreSQL agar perubahan role / approval langsung terbaca
     const { rows } = await pool.query(
-      "SELECT id, username, email, role, teacher_status, approved_at, created_at FROM users WHERE id = $1",
+      "SELECT id, username, email, role, teacher_status, approved_at, avatar_url, created_at FROM users WHERE id = $1",
       [sessionData.id]
     );
 
