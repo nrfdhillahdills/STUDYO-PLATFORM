@@ -24,8 +24,8 @@ export default async function CoursesCatalogPage({ searchParams }) {
     "SELECT id, name FROM categories ORDER BY name ASC"
   );
 
-  // 2. Query seluruh course + informasi progress khusus user yang sedang login
-  const queryParams = [user ? user.id : null];
+  // 2. Query seluruh course + informasi progress khusus student yang sedang login
+  const queryParams = [user && user.role === "student" ? user.id : null];
   const conditions = [];
 
   if (searchQuery.trim() !== "") {
@@ -47,6 +47,8 @@ export default async function CoursesCatalogPage({ searchParams }) {
       c.id,
       c.title,
       c.description,
+      c.category_id,
+      c.teacher_id,
       c.start_date,
       c.end_date,
       cat.name AS category_name,
@@ -62,11 +64,20 @@ export default async function CoursesCatalogPage({ searchParams }) {
     LEFT JOIN enrollments e ON c.id = e.course_id AND e.student_id = $1
     LEFT JOIN content_progress cp ON e.id = cp.enrollment_id
     ${whereClause}
-    GROUP BY c.id, cat.name, u.username, u.email
+    GROUP BY c.id, c.category_id, c.teacher_id, cat.name, u.username, u.email
     ORDER BY c.created_at DESC
   `;
 
   const { rows: courses } = await pool.query(catalogSql, queryParams);
+
+  // Deteksi otomatis kategori aktif saat melakukan pencarian
+  let effectiveCategory = selectedCategory;
+  if (!effectiveCategory && searchQuery.trim() !== "" && courses.length > 0) {
+    const uniqueCats = [...new Set(courses.map((c) => String(c.category_id || "")))];
+    if (uniqueCats.length === 1 && uniqueCats[0] !== "") {
+      effectiveCategory = uniqueCats[0];
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -87,9 +98,6 @@ export default async function CoursesCatalogPage({ searchParams }) {
 
         {/* Form Search */}
         <form action="/courses" method="GET" className="flex w-full md:w-auto gap-2">
-          {selectedCategory && (
-            <input type="hidden" name="category" value={selectedCategory} />
-          )}
           <input
             type="text"
             name="q"
@@ -111,7 +119,7 @@ export default async function CoursesCatalogPage({ searchParams }) {
         <Link
           href={searchQuery ? `/courses?q=${encodeURIComponent(searchQuery)}` : "/courses"}
           className={`px-4 py-2 text-xs font-bold transition clay-pill ${
-            selectedCategory === ""
+            effectiveCategory === ""
               ? "bg-[#182338] text-[#FBE48B]"
               : "bg-white text-[#182338] hover:bg-[#FBE48B]/50"
           }`}
@@ -120,7 +128,7 @@ export default async function CoursesCatalogPage({ searchParams }) {
         </Link>
 
         {categories.map((cat) => {
-          const isSelected = String(cat.id) === String(selectedCategory);
+          const isSelected = String(cat.id) === String(effectiveCategory);
           const params = new URLSearchParams();
           if (searchQuery) params.set("q", searchQuery);
           params.set("category", cat.id);
@@ -160,7 +168,13 @@ export default async function CoursesCatalogPage({ searchParams }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses.map((course) => {
+            const isStudent = !user || user.role === "student";
             const isEnrolled = Boolean(course.enrollment_id);
+            const isOwnerOrAdmin =
+              user &&
+              (user.role === "admin" ||
+                (user.role === "teacher" && course.teacher_id === user.id));
+
             const progressPercent =
               course.total_materials > 0
                 ? Math.round((course.completed_materials / course.total_materials) * 100)
@@ -172,7 +186,6 @@ export default async function CoursesCatalogPage({ searchParams }) {
                 className="clay-card p-6 flex flex-col justify-between gap-5"
               >
                 <div className="space-y-3">
-                  {/* Kategori & Jadwal */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="bg-[#FBE48B] text-[#182338] text-xs font-extrabold px-3 py-1 rounded-full">
                       {course.category_name || "Umum"}
@@ -182,7 +195,6 @@ export default async function CoursesCatalogPage({ searchParams }) {
                     </span>
                   </div>
 
-                  {/* Judul Course (Link ke Detail Course) */}
                   <Link href={`/courses/${course.id}`} className="block group">
                     <h2 className="text-lg font-extrabold text-[#182338] group-hover:text-[#334B77] transition leading-snug">
                       {course.title}
@@ -193,7 +205,6 @@ export default async function CoursesCatalogPage({ searchParams }) {
                     {course.description}
                   </p>
 
-                  {/* Info Pengajar + Tombol Hubungi Teacher */}
                   <div className="pt-2 flex items-center justify-between gap-2 text-xs">
                     <span className="font-semibold text-[#182338]">
                       Pengajar: {course.teacher_name}
@@ -209,11 +220,32 @@ export default async function CoursesCatalogPage({ searchParams }) {
                   </div>
                 </div>
 
-                {/* Bagian Bawah Dinamis (Pintar): Belum Daftar vs Sudah Daftar */}
+                {/* Bagian Bawah Dinamis Berdasarkan Role */}
                 <div className="pt-4 border-t border-[#EFECE4] space-y-3">
-                  {isEnrolled ? (
+                  {!isStudent ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#5A657A]">
+                        {course.total_materials} Materi
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/courses/${course.id}`}
+                          className="px-3.5 py-2 rounded-full text-xs font-bold bg-[#FAF8F2] hover:bg-[#EFECE4] text-[#182338] transition"
+                        >
+                          Detail
+                        </Link>
+                        {isOwnerOrAdmin && (
+                          <Link
+                            href={`/courses/${course.id}/learn`}
+                            className="bg-[#182338] hover:bg-[#263757] text-[#FBE48B] text-xs font-extrabold px-4 py-2 rounded-full transition"
+                          >
+                            Forum Diskusi
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ) : isEnrolled ? (
                     <>
-                      {/* Info Progress Belajar */}
                       <div className="space-y-1.5">
                         <div className="flex justify-between text-xs font-bold">
                           <span className="text-[#5A657A]">
