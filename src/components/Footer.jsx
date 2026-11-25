@@ -1,34 +1,19 @@
-import Link from "next/link";
-
 export default function Footer() {
   return (
-    <footer className="mt-16 px-4 pb-6">
-      <div className="max-w-6xl mx-auto clay-navy px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
-        <div className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-xl bg-[#FBE48B] text-[#182338] flex items-center justify-center font-black">
+    <footer className="mt-16 px-4 pb-8">
+      <div className="max-w-6xl mx-auto border-t border-[#E6E0D2] pt-8 flex flex-col items-center justify-center text-center gap-2.5">
+        <div className="flex items-center justify-center gap-2.5">
+          <span className="w-8 h-8 rounded-xl bg-[#182338] text-[#FBE48B] flex items-center justify-center font-black shadow-xs">
             S
           </span>
-          <div>
-            <p className="font-extrabold text-white">
-              Stud<span className="text-[#FBE48B]">yo</span> Language Learning
-            </p>
-            <p className="text-xs text-slate-300">
-              Platform Kursus Bahasa Interaktif • Pemrograman Web 2026
-            </p>
-          </div>
+          <p className="text-base font-extrabold text-[#182338]">
+            Stud<span className="text-[#D4A72C]">yo</span> Language Learning
+          </p>
         </div>
 
-        <div className="flex items-center gap-5 text-xs text-slate-300">
-          <Link href="/" className="hover:text-[#FBE48B] transition">
-            Beranda
-          </Link>
-          <Link href="/courses" className="hover:text-[#FBE48B] transition">
-            Katalog Kursus
-          </Link>
-          <Link href="/register" className="hover:text-[#FBE48B] transition">
-            Jadi Pengajar
-          </Link>
-        </div>
+        <p className="text-xs font-medium text-[#5A657A]">
+          Platform Kursus Bahasa Interaktif • Pemrograman Web 2026
+        </p>
       </div>
     </footer>
   );
