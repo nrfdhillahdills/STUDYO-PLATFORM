@@ -11,7 +11,6 @@ export default async function HomePage({ searchParams }) {
   const searchQuery = resolvedParams?.q || "";
   const selectedCategory = resolvedParams?.category || "";
 
-  // Sembunyikan "Daftar Jadi Pengajar" untuk Admin, Teacher, dan Student yang sedang Pending Teacher
   const canApplyTeacher =
     !user || (user.role === "student" && user.teacher_status !== "pending");
 
@@ -20,19 +19,33 @@ export default async function HomePage({ searchParams }) {
     "SELECT id, name FROM categories ORDER BY name ASC"
   );
 
-  // 2. Query 5 course terpopuler + filter pencarian & kategori
+  // 2. Deteksi otomatis kategori jika kata kunci pencarian cocok dengan nama kategori
+  let effectiveCategory = selectedCategory;
+  if (!effectiveCategory && searchQuery.trim() !== "") {
+    const qLower = searchQuery.trim().toLowerCase();
+    const matchedCat = categories.find(
+      (cat) =>
+        cat.name.toLowerCase().includes(qLower) ||
+        qLower.includes(cat.name.toLowerCase())
+    );
+    if (matchedCat) {
+      effectiveCategory = String(matchedCat.id);
+    }
+  }
+
+  // 3. Query 5 course terpopuler + filter pencarian & kategori
   const queryParams = [];
   const conditions = [];
 
   if (searchQuery.trim() !== "") {
     queryParams.push(`%${searchQuery.trim()}%`);
     conditions.push(
-      `(c.title ILIKE $${queryParams.length} OR c.description ILIKE $${queryParams.length})`
+      `(c.title ILIKE $${queryParams.length} OR c.description ILIKE $${queryParams.length} OR cat.name ILIKE $${queryParams.length})`
     );
   }
 
-  if (selectedCategory !== "") {
-    queryParams.push(Number(selectedCategory));
+  if (effectiveCategory !== "") {
+    queryParams.push(Number(effectiveCategory));
     conditions.push(`c.category_id = $${queryParams.length}`);
   }
 
@@ -63,8 +76,7 @@ export default async function HomePage({ searchParams }) {
 
   const { rows: popularCourses } = await pool.query(popularCoursesSql, queryParams);
 
-  // Deteksi kategori aktif otomatis saat user mengetik pencarian
-  let effectiveCategory = selectedCategory;
+  // Jika kata kunci bukan nama kategori tapi seluruh course yang muncul berasal dari 1 kategori yang sama
   if (!effectiveCategory && searchQuery.trim() !== "" && popularCourses.length > 0) {
     const uniqueCats = [...new Set(popularCourses.map((c) => String(c.category_id || "")))];
     if (uniqueCats.length === 1 && uniqueCats[0] !== "") {
@@ -136,7 +148,7 @@ export default async function HomePage({ searchParams }) {
               type="text"
               name="q"
               defaultValue={searchQuery}
-              placeholder="Cari bahasa Korea, TOEFL, Inggris..."
+              placeholder="Cari bahasa Korea, Mandarin, Inggris..."
               className="w-full md:w-72 bg-[#FAF8F2] border-2 border-[#E6E0D2] rounded-full px-4 py-2.5 text-sm text-[#182338] focus:outline-none focus:border-[#182338]"
             />
             <button
@@ -151,7 +163,7 @@ export default async function HomePage({ searchParams }) {
         {/* Filter Kategori (Clay Pills) */}
         <div className="flex flex-wrap items-center gap-2.5 pt-1">
           <Link
-            href={searchQuery ? `/?q=${encodeURIComponent(searchQuery)}` : "/"}
+            href="/"
             className={`px-4 py-2 text-xs font-bold transition clay-pill ${
               effectiveCategory === ""
                 ? "bg-[#182338] text-[#FBE48B]"
@@ -163,14 +175,10 @@ export default async function HomePage({ searchParams }) {
 
           {categories.map((cat) => {
             const isSelected = String(cat.id) === String(effectiveCategory);
-            const params = new URLSearchParams();
-            if (searchQuery) params.set("q", searchQuery);
-            params.set("category", cat.id);
-
             return (
               <Link
                 key={cat.id}
-                href={`/?${params.toString()}`}
+                href={`/?category=${cat.id}`}
                 className={`px-4 py-2 text-xs font-bold transition clay-pill ${
                   isSelected
                     ? "bg-[#182338] text-[#FBE48B]"
@@ -207,7 +215,7 @@ export default async function HomePage({ searchParams }) {
         {popularCourses.length === 0 ? (
           <div className="clay-card p-10 text-center space-y-3">
             <p className="text-lg font-bold text-[#182338]">
-              Kursus tidak ditemukan
+              Belum ada kelas pada kategori atau pencarian ini
             </p>
             <p className="text-sm text-[#5A657A]">
               Coba ubah kata kunci pencarian atau pilih kategori bahasa lainnya.
