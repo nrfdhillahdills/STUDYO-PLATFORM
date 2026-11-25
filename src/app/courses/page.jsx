@@ -24,19 +24,33 @@ export default async function CoursesCatalogPage({ searchParams }) {
     "SELECT id, name FROM categories ORDER BY name ASC"
   );
 
-  // 2. Query seluruh course + informasi progress khusus student yang sedang login
+  // 2. Deteksi otomatis kategori jika kata kunci pencarian cocok dengan nama kategori
+  let effectiveCategory = selectedCategory;
+  if (!effectiveCategory && searchQuery.trim() !== "") {
+    const qLower = searchQuery.trim().toLowerCase();
+    const matchedCat = categories.find(
+      (cat) =>
+        cat.name.toLowerCase().includes(qLower) ||
+        qLower.includes(cat.name.toLowerCase())
+    );
+    if (matchedCat) {
+      effectiveCategory = String(matchedCat.id);
+    }
+  }
+
+  // 3. Query seluruh course + informasi progress khusus student yang sedang login
   const queryParams = [user && user.role === "student" ? user.id : null];
   const conditions = [];
 
   if (searchQuery.trim() !== "") {
     queryParams.push(`%${searchQuery.trim()}%`);
     conditions.push(
-      `(c.title ILIKE $${queryParams.length} OR c.description ILIKE $${queryParams.length})`
+      `(c.title ILIKE $${queryParams.length} OR c.description ILIKE $${queryParams.length} OR cat.name ILIKE $${queryParams.length})`
     );
   }
 
-  if (selectedCategory !== "") {
-    queryParams.push(Number(selectedCategory));
+  if (effectiveCategory !== "") {
+    queryParams.push(Number(effectiveCategory));
     conditions.push(`c.category_id = $${queryParams.length}`);
   }
 
@@ -70,8 +84,7 @@ export default async function CoursesCatalogPage({ searchParams }) {
 
   const { rows: courses } = await pool.query(catalogSql, queryParams);
 
-  // Deteksi otomatis kategori aktif saat melakukan pencarian
-  let effectiveCategory = selectedCategory;
+  // Jika kata kunci bukan nama kategori tapi seluruh course yang muncul berasal dari 1 kategori yang sama
   if (!effectiveCategory && searchQuery.trim() !== "" && courses.length > 0) {
     const uniqueCats = [...new Set(courses.map((c) => String(c.category_id || "")))];
     if (uniqueCats.length === 1 && uniqueCats[0] !== "") {
@@ -117,26 +130,22 @@ export default async function CoursesCatalogPage({ searchParams }) {
       {/* Filter Pills Kategori */}
       <div className="flex flex-wrap items-center gap-2.5">
         <Link
-          href={searchQuery ? `/courses?q=${encodeURIComponent(searchQuery)}` : "/courses"}
+          href="/courses"
           className={`px-4 py-2 text-xs font-bold transition clay-pill ${
             effectiveCategory === ""
               ? "bg-[#182338] text-[#FBE48B]"
               : "bg-white text-[#182338] hover:bg-[#FBE48B]/50"
           }`}
         >
-          Semua Kategori ({courses.length})
+          Semua Kategori
         </Link>
 
         {categories.map((cat) => {
           const isSelected = String(cat.id) === String(effectiveCategory);
-          const params = new URLSearchParams();
-          if (searchQuery) params.set("q", searchQuery);
-          params.set("category", cat.id);
-
           return (
             <Link
               key={cat.id}
-              href={`/courses?${params.toString()}`}
+              href={`/courses?category=${cat.id}`}
               className={`px-4 py-2 text-xs font-bold transition clay-pill ${
                 isSelected
                   ? "bg-[#182338] text-[#FBE48B]"
