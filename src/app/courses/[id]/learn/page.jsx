@@ -16,7 +16,6 @@ export default async function LearnCoursePage({ params, searchParams }) {
   const resolvedSearch = await searchParams;
   const requestedContentId = resolvedSearch?.content ? Number(resolvedSearch.content) : null;
 
-  // 1. Ambil data course
   const { rows: courseRows } = await pool.query(
     `SELECT c.id, c.title, c.teacher_id, u.username AS teacher_name
      FROM courses c
@@ -27,44 +26,50 @@ export default async function LearnCoursePage({ params, searchParams }) {
   const course = courseRows[0];
   if (!course) notFound();
 
-  // 2. Cek enrollment student (atau jika pemilik/admin)
-  const { rows: enrollRows } = await pool.query(
-    "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2",
-    [user.id, course.id]
-  );
+  const isStudent = user.role === "student";
+  const isOwnerOrAdmin =
+    user.role === "admin" || (user.role === "teacher" && course.teacher_id === user.id);
 
-  if (enrollRows.length === 0) {
+  let enrollmentId = null;
+  let completedSet = new Set();
+  let certificate = null;
+
+  if (isStudent) {
+    const { rows: enrollRows } = await pool.query(
+      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2",
+      [user.id, course.id]
+    );
+    if (enrollRows.length === 0) {
+      redirect(`/courses/${course.id}`);
+    }
+    enrollmentId = enrollRows[0].id;
+
+    const { rows: progressRows } = await pool.query(
+      "SELECT content_id FROM content_progress WHERE enrollment_id = $1",
+      [enrollmentId]
+    );
+    completedSet = new Set(progressRows.map((r) => r.content_id));
+
+    const { rows: certRows } = await pool.query(
+      "SELECT certificate_code, issued_at FROM certificates WHERE enrollment_id = $1",
+      [enrollmentId]
+    );
+    certificate = certRows[0] || null;
+  } else if (!isOwnerOrAdmin) {
     redirect(`/courses/${course.id}`);
   }
 
-  const enrollmentId = enrollRows[0].id;
-
-  // 3. Ambil semua materi berurutan sesuai order_index
   const { rows: contents } = await pool.query(
     "SELECT id, title, body, order_index FROM contents WHERE course_id = $1 ORDER BY order_index ASC",
     [course.id]
   );
-
-  // 4. Ambil daftar materi yang sudah diselesaikan
-  const { rows: progressRows } = await pool.query(
-    "SELECT content_id FROM content_progress WHERE enrollment_id = $1",
-    [enrollmentId]
-  );
-  const completedSet = new Set(progressRows.map((r) => r.content_id));
-
-  // 5. Cek apakah sertifikat sudah diterbitkan (100% selesai)
-  const { rows: certRows } = await pool.query(
-    "SELECT certificate_code, issued_at FROM certificates WHERE enrollment_id = $1",
-    [enrollmentId]
-  );
-  const certificate = certRows[0] || null;
 
   if (contents.length === 0) {
     return (
       <div className="clay-card p-10 text-center space-y-4">
         <h1 className="text-2xl font-extrabold text-[#182338]">{course.title}</h1>
         <p className="text-sm text-[#5A657A]">
-          Pengajar belum mengunggah materi pembelajaran untuk kelas ini.
+          Belum ada materi pembelajaran di kelas ini.
         </p>
         <Link
           href={`/courses/${course.id}`}
@@ -76,7 +81,6 @@ export default async function LearnCoursePage({ params, searchParams }) {
     );
   }
 
-  // Tentukan materi aktif (dari query ?content=ID atau materi pertama yang belum selesai / materi 1)
   let currentIndex = contents.findIndex((c) => c.id === requestedContentId);
   if (currentIndex === -1) {
     const firstUnfinished = contents.findIndex((c) => !completedSet.has(c.id));
@@ -88,7 +92,6 @@ export default async function LearnCoursePage({ params, searchParams }) {
   const isCurrentDone = completedSet.has(activeContent.id);
   const progressPercent = Math.round((completedSet.size / contents.length) * 100);
 
-  // 6. Ambil komentar forum diskusi khusus untuk materi aktif ini
   const { rows: discussions } = await pool.query(
     `SELECT d.id, d.comment, d.created_at, u.username, u.role
      FROM discussions d
@@ -100,7 +103,7 @@ export default async function LearnCoursePage({ params, searchParams }) {
 
   return (
     <div className="space-y-6">
-      {/* Top Bar Navigasi & Progress */}
+      {/* Top Bar Navigasi & Progress (Progress hanya untuk Student) */}
       <div className="clay-navy p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <Link
@@ -114,24 +117,30 @@ export default async function LearnCoursePage({ params, searchParams }) {
           </h1>
         </div>
 
-        <div className="w-full sm:w-64 space-y-1.5">
-          <div className="flex justify-between text-xs font-bold text-slate-200">
-            <span>Progres Belajar</span>
-            <span className="text-[#FBE48B]">
-              {completedSet.size}/{contents.length} ({progressPercent}%)
-            </span>
+        {isStudent ? (
+          <div className="w-full sm:w-64 space-y-1.5">
+            <div className="flex justify-between text-xs font-bold text-slate-200">
+              <span>Progres Belajar</span>
+              <span className="text-[#FBE48B]">
+                {completedSet.size}/{contents.length} ({progressPercent}%)
+              </span>
+            </div>
+            <div className="w-full h-2.5 bg-[#253554] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#FBE48B] rounded-full transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
           </div>
-          <div className="w-full h-2.5 bg-[#253554] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[#FBE48B] rounded-full transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        </div>
+        ) : (
+          <span className="bg-[#FBE48B] text-[#182338] text-xs font-extrabold px-4 py-2 rounded-full">
+            Mode {user.role === "admin" ? "Admin" : "Instruktur"} • Pantau Diskusi
+          </span>
+        )}
       </div>
 
-      {/* Banner Selamat & Sertifikat Digital jika 100% Selesai */}
-      {certificate && (
+      {/* Banner Sertifikat Khusus Student yang 100% Selesai */}
+      {isStudent && certificate && (
         <div className="clay-yellow p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="inline-block bg-[#182338] text-[#FBE48B] text-[11px] font-extrabold px-3 py-0.5 rounded-full">
@@ -141,7 +150,8 @@ export default async function LearnCoursePage({ params, searchParams }) {
               Selamat! Kamu telah menyelesaikan seluruh materi kelas ini.
             </h2>
             <p className="text-xs text-[#182338]/80 font-semibold">
-              Kode Verifikasi Sertifikat: <span className="font-mono font-bold">{certificate.certificate_code}</span>
+              Kode Verifikasi Sertifikat:{" "}
+              <span className="font-mono font-bold">{certificate.certificate_code}</span>
             </p>
           </div>
 
@@ -154,9 +164,8 @@ export default async function LearnCoursePage({ params, searchParams }) {
         </div>
       )}
 
-      {/* Grid Utama: Sidebar Silabus + Konten Materi & Diskusi */}
+      {/* Grid Utama */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Sidebar Daftar Materi (Urut order_index) */}
         <aside className="lg:col-span-4 clay-card p-5 space-y-3">
           <h2 className="text-sm font-extrabold text-[#182338] px-1">
             Daftar Materi ({contents.length})
@@ -165,7 +174,7 @@ export default async function LearnCoursePage({ params, searchParams }) {
           <div className="space-y-2">
             {contents.map((item) => {
               const isSelected = item.id === activeContent.id;
-              const isDone = completedSet.has(item.id);
+              const isDone = isStudent && completedSet.has(item.id);
 
               return (
                 <Link
@@ -201,7 +210,6 @@ export default async function LearnCoursePage({ params, searchParams }) {
           </div>
         </aside>
 
-        {/* Area Utama: Isi Materi + Mark as Done + Lanjutkan + Forum Diskusi */}
         <div className="lg:col-span-8 space-y-6">
           <article className="clay-card p-6 sm:p-8 space-y-6">
             <div className="border-b border-[#EFECE4] pb-4 flex flex-wrap items-center justify-between gap-2">
@@ -214,38 +222,46 @@ export default async function LearnCoursePage({ params, searchParams }) {
                 </h2>
               </div>
 
-              {isCurrentDone && (
+              {isStudent && isCurrentDone && (
                 <span className="bg-emerald-100 text-emerald-800 text-xs font-extrabold px-3.5 py-1.5 rounded-full">
                   ✓ Sudah Selesai
                 </span>
               )}
             </div>
 
-            {/* Isi Materi Pembelajaran (Mendukung HTML dari Rich Text Editor) */}
             <div
               className="rich-content text-sm sm:text-base text-[#182338]"
               dangerouslySetInnerHTML={{ __html: activeContent.body }}
             />
 
-            {/* Tombol Aksi: "Mark as Done" & "Lanjutkan" */}
+            {/* Tombol Aksi Bawah */}
             <div className="pt-6 border-t border-[#EFECE4] flex flex-wrap items-center justify-between gap-3">
-              <form action={markContentAsDone}>
-                <input type="hidden" name="course_id" value={course.id} />
-                <input type="hidden" name="content_id" value={activeContent.id} />
-                {nextContent && (
-                  <input type="hidden" name="next_content_id" value={nextContent.id} />
-                )}
-                <button
-                  type="submit"
-                  className={`px-5 py-3 rounded-full text-xs sm:text-sm font-extrabold transition cursor-pointer ${
-                    isCurrentDone
-                      ? "bg-emerald-600 text-white"
-                      : "bg-[#182338] hover:bg-[#263757] text-[#FBE48B]"
-                  }`}
+              {isStudent ? (
+                <form action={markContentAsDone}>
+                  <input type="hidden" name="course_id" value={course.id} />
+                  <input type="hidden" name="content_id" value={activeContent.id} />
+                  {nextContent && (
+                    <input type="hidden" name="next_content_id" value={nextContent.id} />
+                  )}
+                  <button
+                    type="submit"
+                    className={`px-5 py-3 rounded-full text-xs sm:text-sm font-extrabold transition cursor-pointer ${
+                      isCurrentDone
+                        ? "bg-emerald-600 text-white"
+                        : "bg-[#182338] hover:bg-[#263757] text-[#FBE48B]"
+                    }`}
+                  >
+                    {isCurrentDone ? "✓ Materi Telah Ditandai Selesai" : "Mark as Done"}
+                  </button>
+                </form>
+              ) : (
+                <Link
+                  href={`/dashboard/courses/${course.id}/contents/${activeContent.id}/edit`}
+                  className="bg-[#182338] hover:bg-[#263757] text-[#FBE48B] px-5 py-3 rounded-full text-xs sm:text-sm font-extrabold transition"
                 >
-                  {isCurrentDone ? "✓ Materi Telah Ditandai Selesai" : "Mark as Done"}
-                </button>
-              </form>
+                  Edit Materi Ini &rarr;
+                </Link>
+              )}
 
               {nextContent ? (
                 <Link
@@ -256,27 +272,28 @@ export default async function LearnCoursePage({ params, searchParams }) {
                 </Link>
               ) : (
                 <Link
-                  href="/profile"
+                  href={isStudent ? "/profile" : "/dashboard/courses"}
                   className="clay-yellow px-6 py-3 text-xs sm:text-sm font-extrabold"
                 >
-                  Selesai • Lihat Profil &amp; Progres &rarr;
+                  {isStudent ? "Selesai • Lihat Profil & Progres →" : "Kembali ke Daftar Kelas →"}
                 </Link>
               )}
             </div>
           </article>
 
-          {/* FORUM DISKUSI DI BAWAH TIAP MATERI */}
+          {/* FORUM DISKUSI */}
           <section className="clay-card p-6 sm:p-8 space-y-6">
             <div>
               <h3 className="text-lg font-extrabold text-[#182338]">
                 Forum Diskusi Materi ({discussions.length})
               </h3>
               <p className="text-xs text-[#5A657A]">
-                Ajukan pertanyaan kosakata, tata bahasa, atau diskusikan materi ini bersama pengajar dan siswa lain.
+                {isStudent
+                  ? "Ajukan pertanyaan kosakata atau tata bahasa pada materi ini."
+                  : "Balas pertanyaan dan bantu siswa memahami materi ini."}
               </p>
             </div>
 
-            {/* Form Tambah Komentar */}
             <form action={postDiscussionComment} className="space-y-3">
               <input type="hidden" name="course_id" value={course.id} />
               <input type="hidden" name="content_id" value={activeContent.id} />
@@ -284,7 +301,11 @@ export default async function LearnCoursePage({ params, searchParams }) {
                 name="comment"
                 rows={3}
                 required
-                placeholder="Tulis pertanyaan atau catatan diskusimu di sini..."
+                placeholder={
+                  isStudent
+                    ? "Tulis pertanyaan atau catatan diskusimu di sini..."
+                    : "Tulis balasan atau penjelasan tambahan untuk siswa..."
+                }
                 className="w-full bg-[#FAF8F2] border-2 border-[#E6E0D2] rounded-2xl p-4 text-sm text-[#182338] focus:outline-none focus:border-[#182338]"
               />
               <div className="flex justify-end">
@@ -292,16 +313,15 @@ export default async function LearnCoursePage({ params, searchParams }) {
                   type="submit"
                   className="bg-[#182338] hover:bg-[#263757] text-[#FBE48B] text-xs font-extrabold px-5 py-2.5 rounded-full transition cursor-pointer"
                 >
-                  Kirim Komentar
+                  {isStudent ? "Kirim Komentar" : "Kirim Balasan"}
                 </button>
               </div>
             </form>
 
-            {/* Daftar Komentar */}
             <div className="space-y-3">
               {discussions.length === 0 ? (
                 <p className="text-xs text-[#5A657A] bg-[#FAF8F2] p-4 rounded-2xl text-center">
-                  Belum ada diskusi pada materi ini. Jadilah yang pertama bertanya!
+                  Belum ada diskusi pada materi ini.
                 </p>
               ) : (
                 discussions.map((item) => (
