@@ -14,7 +14,7 @@ export default async function ProfilePage({ searchParams }) {
   const successMsg = resolvedSearch?.success || "";
   const errorMsg = resolvedSearch?.error || "";
 
-  // 1. Cek Logika Status Pending Teacher (Sesuai Ketentuan)
+  // 1. Cek Logika Status Pending Teacher (Khusus pendaftar Teacher yang belum di-approve)
   const isPendingTeacher =
     user.role === "student" && user.teacher_status === "pending";
 
@@ -29,29 +29,33 @@ export default async function ProfilePage({ searchParams }) {
     }
   }
 
-  // 3. Query Kursus yang Diikuti (Untuk Student & semua user yang pernah enroll)
-  const { rows: enrolledCourses } = await pool.query(
-    `SELECT
-      c.id,
-      c.title,
-      cat.name AS category_name,
-      u.username AS teacher_name,
-      e.enrolled_at,
-      COUNT(DISTINCT cnt.id)::int AS total_materials,
-      COUNT(DISTINCT cp.content_id)::int AS completed_materials,
-      MAX(cert.certificate_code) AS certificate_code
-     FROM enrollments e
-     JOIN courses c ON e.course_id = c.id
-     LEFT JOIN categories cat ON c.category_id = cat.id
-     LEFT JOIN users u ON c.teacher_id = u.id
-     LEFT JOIN contents cnt ON c.id = cnt.course_id
-     LEFT JOIN content_progress cp ON e.id = cp.enrollment_id
-     LEFT JOIN certificates cert ON e.id = cert.enrollment_id
-     WHERE e.student_id = $1
-     GROUP BY c.id, cat.name, u.username, e.enrolled_at
-     ORDER BY e.enrolled_at DESC`,
-    [user.id]
-  );
+  // 3. Query Kursus yang Diikuti (Khusus role Student)
+  let enrolledCourses = [];
+  if (user.role === "student") {
+    const { rows: enrollRows } = await pool.query(
+      `SELECT
+        c.id,
+        c.title,
+        cat.name AS category_name,
+        u.username AS teacher_name,
+        e.enrolled_at,
+        COUNT(DISTINCT cnt.id)::int AS total_materials,
+        COUNT(DISTINCT cp.content_id)::int AS completed_materials,
+        MAX(cert.certificate_code) AS certificate_code
+       FROM enrollments e
+       JOIN courses c ON e.course_id = c.id
+       LEFT JOIN categories cat ON c.category_id = cat.id
+       LEFT JOIN users u ON c.teacher_id = u.id
+       LEFT JOIN contents cnt ON c.id = cnt.course_id
+       LEFT JOIN content_progress cp ON e.id = cp.enrollment_id
+       LEFT JOIN certificates cert ON e.id = cert.enrollment_id
+       WHERE e.student_id = $1
+       GROUP BY c.id, cat.name, u.username, e.enrolled_at
+       ORDER BY e.enrolled_at DESC`,
+      [user.id]
+    );
+    enrolledCourses = enrollRows;
+  }
 
   // 4. Query Kursus yang Diajarkan & Progres Student (Khusus Teacher / Admin)
   let taughtCourses = [];
@@ -198,7 +202,7 @@ export default async function ProfilePage({ searchParams }) {
         </div>
       </section>
 
-      {/* BAGIAN TEACHER: KURSUS YANG DIAJARKAN & PROGRES STUDENT */}
+      {/* BAGIAN TEACHER / ADMIN: KURSUS YANG DIAJARKAN, DISKUSI & PROGRES STUDENT */}
       {(user.role === "teacher" || user.role === "admin") && (
         <section className="space-y-6">
           <div className="flex items-center justify-between">
@@ -207,7 +211,7 @@ export default async function ProfilePage({ searchParams }) {
                 Kursus yang Anda Ajarkan ({taughtCourses.length})
               </h2>
               <p className="text-sm text-[#5A657A]">
-                Pantau daftar kelas Anda beserta perkembangan belajar setiap siswa.
+                Kelola materi, balas diskusi siswa, dan pantau perkembangan belajar di kelas Anda.
               </p>
             </div>
             <Link
@@ -244,7 +248,13 @@ export default async function ProfilePage({ searchParams }) {
                     {course.title}
                   </h3>
 
-                  <div className="pt-2 flex items-center gap-3">
+                  <div className="pt-2 flex flex-wrap items-center gap-2.5">
+                    <Link
+                      href={`/courses/${course.id}/learn`}
+                      className="clay-yellow text-xs font-extrabold px-4 py-2"
+                    >
+                      Pantau &amp; Balas Diskusi
+                    </Link>
                     <Link
                       href={`/dashboard/courses/${course.id}/contents`}
                       className="bg-[#182338] text-[#FBE48B] text-xs font-bold px-4 py-2 rounded-full"
@@ -253,9 +263,9 @@ export default async function ProfilePage({ searchParams }) {
                     </Link>
                     <Link
                       href={`/courses/${course.id}`}
-                      className="text-xs font-bold text-[#182338] hover:underline"
+                      className="text-xs font-bold text-[#182338] hover:underline px-2"
                     >
-                      Lihat Halaman Kelas
+                      Detail Kelas
                     </Link>
                   </div>
                 </div>
@@ -324,105 +334,107 @@ export default async function ProfilePage({ searchParams }) {
         </section>
       )}
 
-      {/* BAGIAN STUDENT: KURSUS YANG DIIKUTI DENGAN PROGRESS */}
-      <section className="space-y-5">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-[#182338]">
-            Kursus yang Anda Ikuti ({enrolledCourses.length})
-          </h2>
-          <p className="text-sm text-[#5A657A]">
-            Lanjutkan sesi belajarmu atau unduh sertifikat untuk kelas yang telah tuntas 100%.
-          </p>
-        </div>
-
-        {enrolledCourses.length === 0 ? (
-          <div className="clay-card p-10 text-center space-y-3">
-            <p className="text-base font-bold text-[#182338]">
-              Kamu belum mengikuti kelas bahasa apapun.
+      {/* BAGIAN KHUSUS STUDENT: KURSUS YANG DIIKUTI DENGAN PROGRESS & SERTIFIKAT */}
+      {user.role === "student" && (
+        <section className="space-y-5">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-[#182338]">
+              Kursus yang Anda Ikuti ({enrolledCourses.length})
+            </h2>
+            <p className="text-sm text-[#5A657A]">
+              Lanjutkan sesi belajarmu atau unduh sertifikat untuk kelas yang telah tuntas 100%.
             </p>
-            <p className="text-xs text-[#5A657A]">
-              Pilih kursus bahasa di katalog untuk mulai belajar sekarang.
-            </p>
-            <Link
-              href="/courses"
-              className="inline-block clay-yellow px-5 py-2.5 text-xs font-extrabold mt-2"
-            >
-              Lihat Katalog Kursus &rarr;
-            </Link>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {enrolledCourses.map((item) => {
-              const progressPercent =
-                item.total_materials > 0
-                  ? Math.round((item.completed_materials / item.total_materials) * 100)
-                  : 0;
 
-              return (
-                <article
-                  key={item.id}
-                  className="clay-card p-6 flex flex-col justify-between gap-4"
-                >
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="bg-[#FBE48B] text-[#182338] text-xs font-extrabold px-3 py-1 rounded-full">
-                        {item.category_name || "Umum"}
-                      </span>
-                      {progressPercent === 100 && (
-                        <span className="bg-emerald-100 text-emerald-800 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full">
-                          ✓ Lulus
+          {enrolledCourses.length === 0 ? (
+            <div className="clay-card p-10 text-center space-y-3">
+              <p className="text-base font-bold text-[#182338]">
+                Kamu belum mengikuti kelas bahasa apapun.
+              </p>
+              <p className="text-xs text-[#5A657A]">
+                Pilih kursus bahasa di katalog untuk mulai belajar sekarang.
+              </p>
+              <Link
+                href="/courses"
+                className="inline-block clay-yellow px-5 py-2.5 text-xs font-extrabold mt-2"
+              >
+                Lihat Katalog Kursus &rarr;
+              </Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {enrolledCourses.map((item) => {
+                const progressPercent =
+                  item.total_materials > 0
+                    ? Math.round((item.completed_materials / item.total_materials) * 100)
+                    : 0;
+
+                return (
+                  <article
+                    key={item.id}
+                    className="clay-card p-6 flex flex-col justify-between gap-4"
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="bg-[#FBE48B] text-[#182338] text-xs font-extrabold px-3 py-1 rounded-full">
+                          {item.category_name || "Umum"}
                         </span>
-                      )}
+                        {progressPercent === 100 && (
+                          <span className="bg-emerald-100 text-emerald-800 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full">
+                            ✓ Lulus
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-lg font-extrabold text-[#182338] leading-snug">
+                        {item.title}
+                      </h3>
+                      <p className="text-xs text-[#5A657A]">
+                        Pengajar: {item.teacher_name}
+                      </p>
                     </div>
 
-                    <h3 className="text-lg font-extrabold text-[#182338] leading-snug">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-[#5A657A]">
-                      Pengajar: {item.teacher_name}
-                    </p>
-                  </div>
-
-                  <div className="space-y-3 pt-3 border-t border-[#EFECE4]">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs font-bold">
-                        <span className="text-[#5A657A]">
-                          {item.completed_materials}/{item.total_materials} Materi
-                        </span>
-                        <span className="text-[#182338]">{progressPercent}%</span>
+                    <div className="space-y-3 pt-3 border-t border-[#EFECE4]">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs font-bold">
+                          <span className="text-[#5A657A]">
+                            {item.completed_materials}/{item.total_materials} Materi
+                          </span>
+                          <span className="text-[#182338]">{progressPercent}%</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-[#EFECE4] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#182338] rounded-full transition-all"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-2.5 bg-[#EFECE4] rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-[#182338] rounded-full transition-all"
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
-                    </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href={`/courses/${item.id}/learn`}
-                        className="flex-1 text-center clay-yellow py-2.5 px-4 text-xs font-extrabold"
-                      >
-                        Lanjutkan Belajar &rarr;
-                      </Link>
-
-                      {item.certificate_code && (
+                      <div className="flex flex-wrap gap-2">
                         <Link
-                          href={`/certificates/${item.certificate_code}`}
-                          className="bg-[#182338] text-[#FBE48B] text-xs font-extrabold px-3.5 py-2.5 rounded-full"
+                          href={`/courses/${item.id}/learn`}
+                          className="flex-1 text-center clay-yellow py-2.5 px-4 text-xs font-extrabold"
                         >
-                          Sertifikat
+                          Lanjutkan Belajar &rarr;
                         </Link>
-                      )}
+
+                        {item.certificate_code && (
+                          <Link
+                            href={`/certificates/${item.certificate_code}`}
+                            className="bg-[#182338] text-[#FBE48B] text-xs font-extrabold px-3.5 py-2.5 rounded-full"
+                          >
+                            Sertifikat
+                          </Link>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
