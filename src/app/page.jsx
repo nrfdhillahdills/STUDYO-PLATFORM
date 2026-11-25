@@ -1,26 +1,34 @@
 import Link from "next/link";
 import pool from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import ClayMascot from "@/components/ClayMascot";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage({ searchParams }) {
+  const user = await getCurrentUser();
   const resolvedParams = await searchParams;
   const searchQuery = resolvedParams?.q || "";
   const selectedCategory = resolvedParams?.category || "";
 
-  // 1. Ambil semua kategori dari database untuk filter
+  // Sembunyikan "Daftar Jadi Pengajar" untuk Admin, Teacher, dan Student yang sedang Pending Teacher
+  const canApplyTeacher =
+    !user || (user.role === "student" && user.teacher_status !== "pending");
+
+  // 1. Ambil semua kategori dari database
   const { rows: categories } = await pool.query(
     "SELECT id, name FROM categories ORDER BY name ASC"
   );
 
-  // 2. Query 5 course terpopuler (berdasarkan jumlah student enrolled) + filter pencarian & kategori
+  // 2. Query 5 course terpopuler + filter pencarian & kategori
   const queryParams = [];
   const conditions = [];
 
   if (searchQuery.trim() !== "") {
     queryParams.push(`%${searchQuery.trim()}%`);
-    conditions.push(`(c.title ILIKE $${queryParams.length} OR c.description ILIKE $${queryParams.length})`);
+    conditions.push(
+      `(c.title ILIKE $${queryParams.length} OR c.description ILIKE $${queryParams.length})`
+    );
   }
 
   if (selectedCategory !== "") {
@@ -35,6 +43,7 @@ export default async function HomePage({ searchParams }) {
       c.id,
       c.title,
       c.description,
+      c.category_id,
       c.start_date,
       c.end_date,
       cat.name AS category_name,
@@ -47,16 +56,25 @@ export default async function HomePage({ searchParams }) {
     LEFT JOIN enrollments e ON c.id = e.course_id
     LEFT JOIN contents cnt ON c.id = cnt.course_id
     ${whereClause}
-    GROUP BY c.id, cat.name, u.username
+    GROUP BY c.id, c.category_id, cat.name, u.username
     ORDER BY total_students DESC, c.created_at DESC
     LIMIT 5
   `;
 
   const { rows: popularCourses } = await pool.query(popularCoursesSql, queryParams);
 
+  // Deteksi kategori aktif otomatis saat user mengetik pencarian
+  let effectiveCategory = selectedCategory;
+  if (!effectiveCategory && searchQuery.trim() !== "" && popularCourses.length > 0) {
+    const uniqueCats = [...new Set(popularCourses.map((c) => String(c.category_id || "")))];
+    if (uniqueCats.length === 1 && uniqueCats[0] !== "") {
+      effectiveCategory = uniqueCats[0];
+    }
+  }
+
   return (
     <div className="space-y-12">
-      {/* HERO SECTION: Navy + Soft Yellow + 3D Matte Clay Cartoon */}
+      {/* HERO SECTION */}
       <section className="clay-navy p-7 sm:p-12 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-7 space-y-5">
@@ -83,12 +101,15 @@ export default async function HomePage({ searchParams }) {
               >
                 Jelajahi Semua Kelas &rarr;
               </Link>
-              <Link
-                href="/register"
-                className="px-6 py-3.5 rounded-full text-sm font-bold bg-[#253554] hover:bg-[#2F4369] text-white border border-[#3A517D] transition"
-              >
-                Daftar Jadi Pengajar
-              </Link>
+
+              {canApplyTeacher && (
+                <Link
+                  href="/register"
+                  className="px-6 py-3.5 rounded-full text-sm font-bold bg-[#253554] hover:bg-[#2F4369] text-white border border-[#3A517D] transition"
+                >
+                  Daftar Jadi Pengajar
+                </Link>
+              )}
             </div>
           </div>
 
@@ -110,11 +131,7 @@ export default async function HomePage({ searchParams }) {
             </p>
           </div>
 
-          {/* Form Pencarian */}
           <form action="/" method="GET" className="flex w-full md:w-auto gap-2">
-            {selectedCategory && (
-              <input type="hidden" name="category" value={selectedCategory} />
-            )}
             <input
               type="text"
               name="q"
@@ -136,7 +153,7 @@ export default async function HomePage({ searchParams }) {
           <Link
             href={searchQuery ? `/?q=${encodeURIComponent(searchQuery)}` : "/"}
             className={`px-4 py-2 text-xs font-bold transition clay-pill ${
-              selectedCategory === ""
+              effectiveCategory === ""
                 ? "bg-[#182338] text-[#FBE48B]"
                 : "bg-[#FAF8F2] text-[#182338] hover:bg-[#FBE48B]/50"
             }`}
@@ -145,7 +162,7 @@ export default async function HomePage({ searchParams }) {
           </Link>
 
           {categories.map((cat) => {
-            const isSelected = String(cat.id) === String(selectedCategory);
+            const isSelected = String(cat.id) === String(effectiveCategory);
             const params = new URLSearchParams();
             if (searchQuery) params.set("q", searchQuery);
             params.set("category", cat.id);
@@ -210,7 +227,6 @@ export default async function HomePage({ searchParams }) {
                 className="clay-card p-6 flex flex-col justify-between gap-5"
               >
                 <div className="space-y-3">
-                  {/* Header Badge Kategori + Peringkat Populer */}
                   <div className="flex items-center justify-between gap-2">
                     <span className="bg-[#FBE48B] text-[#182338] text-xs font-extrabold px-3 py-1 rounded-full">
                       {course.category_name || "Umum"}
