@@ -8,15 +8,18 @@ import { getCurrentUser } from "@/lib/auth";
 export async function enrollCourse(formData) {
   const user = await getCurrentUser();
 
-  // Guest harus login/daftar terlebih dahulu untuk mengikuti course
   if (!user) {
     redirect("/login");
+  }
+
+  // Hanya role 'student' yang dapat mengikuti course
+  if (user.role !== "student") {
+    redirect("/courses");
   }
 
   const courseId = Number(formData.get("course_id"));
   if (!courseId || Number.isNaN(courseId)) return;
 
-  // Simpan data enrollment ke PostgreSQL (ON CONFLICT DO NOTHING mencegah duplikasi)
   await pool.query(
     `INSERT INTO enrollments (student_id, course_id)
      VALUES ($1, $2)
