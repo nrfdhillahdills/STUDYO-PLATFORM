@@ -261,11 +261,11 @@ export default async function CourseDetailPage({ params }) {
                     >
                       {isDone ? "✓ Selesai" : "Buka Materi"}
                     </Link>
-                  ) : (
+                  ) : !user ? (
                     <span className="text-xs font-semibold text-[#5A657A]">
-                      {isStudent ? "Terkunci (Daftar dulu)" : "Hanya untuk Student"}
+                      Terkunci (Daftar dulu)
                     </span>
-                  )}
+                  ) : null}
                 </div>
               );
             })}
