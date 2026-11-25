@@ -10,13 +10,15 @@ export async function markContentAsDone(formData) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
+  // Hanya Student yang bisa menandai selesai dan menerima sertifikat
+  if (user.role !== "student") return;
+
   const courseId = Number(formData.get("course_id"));
   const contentId = Number(formData.get("content_id"));
   const nextContentId = formData.get("next_content_id");
 
   if (!courseId || !contentId) return;
 
-  // 1. Pastikan user terdaftar pada course ini
   const { rows: enrollRows } = await pool.query(
     "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2",
     [user.id, courseId]
@@ -25,7 +27,6 @@ export async function markContentAsDone(formData) {
 
   const enrollmentId = enrollRows[0].id;
 
-  // 2. Simpan data materi selesai ke content_progress
   await pool.query(
     `INSERT INTO content_progress (enrollment_id, content_id)
      VALUES ($1, $2)
@@ -33,7 +34,6 @@ export async function markContentAsDone(formData) {
     [enrollmentId, contentId]
   );
 
-  // 3. Cek apakah total materi selesai sudah mencapai 100% -> Terbitkan Sertifikat Unik
   const { rows: countRows } = await pool.query(
     `SELECT
       (SELECT COUNT(*)::int FROM contents WHERE course_id = $1) AS total_contents,
@@ -62,7 +62,6 @@ export async function markContentAsDone(formData) {
   revalidatePath("/courses");
   revalidatePath("/profile");
 
-  // Jika ada materi berikutnya, arahkan otomatis ke materi selanjutnya
   if (nextContentId) {
     redirect(`/courses/${courseId}/learn?content=${nextContentId}`);
   } else {
