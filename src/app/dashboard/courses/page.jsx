@@ -230,6 +230,12 @@ export default async function ManageCoursesPage({ searchParams }) {
                         Kelola Materi
                       </Link>
                       <Link
+                        href={`/courses/${c.id}/learn`}
+                        className="clay-yellow text-xs font-extrabold px-3.5 py-1.5"
+                      >
+                        Diskusi
+                      </Link>
+                      <Link
                         href={`/dashboard/courses/${c.id}/edit`}
                         className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-[#FAF8F2] border border-[#E6E0D2] hover:bg-[#FBE48B] transition"
                       >
