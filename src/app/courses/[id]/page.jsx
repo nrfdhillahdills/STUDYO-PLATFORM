@@ -20,7 +20,6 @@ export default async function CourseDetailPage({ params }) {
 
   const user = await getCurrentUser();
 
-  // 1. Ambil detail course
   const { rows: courseRows } = await pool.query(
     `SELECT 
       c.*,
@@ -40,17 +39,21 @@ export default async function CourseDetailPage({ params }) {
   const course = courseRows[0];
   if (!course) notFound();
 
-  // 2. Ambil daftar silabus materi urut order_index
   const { rows: contents } = await pool.query(
     "SELECT id, title, order_index FROM contents WHERE course_id = $1 ORDER BY order_index ASC",
     [course.id]
   );
 
-  // 3. Cek apakah user sudah terdaftar & berapa progresnya
+  const isStudent = !user || user.role === "student";
+  const isOwnerOrAdmin =
+    user &&
+    (user.role === "admin" ||
+      (user.role === "teacher" && course.teacher_id === user.id));
+
   let enrollment = null;
   let completedIds = new Set();
 
-  if (user) {
+  if (user && user.role === "student") {
     const { rows: enrollRows } = await pool.query(
       "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2",
       [user.id, course.id]
@@ -79,7 +82,6 @@ export default async function CourseDetailPage({ params }) {
         </Link>
       </div>
 
-      {/* Header Detail Course */}
       <section className="clay-navy p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         <div className="lg:col-span-8 space-y-4">
           <div className="flex flex-wrap items-center gap-2.5">
@@ -110,9 +112,37 @@ export default async function CourseDetailPage({ params }) {
           </div>
         </div>
 
-        {/* Kartu Aksi Kanan (Clay Soft Yellow / White) */}
+        {/* Kartu Aksi Kanan Menyesuaikan Role */}
         <div className="lg:col-span-4 bg-white text-[#182338] rounded-[28px] p-6 shadow-lg space-y-4">
-          {enrollment ? (
+          {!isStudent ? (
+            <>
+              <p className="text-sm font-extrabold text-[#182338]">
+                Mode {user.role === "admin" ? "Administrator" : "Pengajar"}
+              </p>
+              <p className="text-xs text-[#5A657A] leading-relaxed">
+                {isOwnerOrAdmin
+                  ? "Anda dapat membaca materi dan membalas diskusi siswa secara langsung tanpa perlu mendaftar kelas."
+                  : "Anda sedang melihat pratinjau kelas milik pengajar lain."}
+              </p>
+
+              {isOwnerOrAdmin && (
+                <div className="space-y-2">
+                  <Link
+                    href={`/courses/${course.id}/learn`}
+                    className="block w-full text-center clay-yellow py-3 text-sm font-extrabold"
+                  >
+                    Pantau Materi &amp; Balas Diskusi &rarr;
+                  </Link>
+                  <Link
+                    href={`/dashboard/courses/${course.id}/contents`}
+                    className="block w-full text-center py-2.5 rounded-full text-xs font-bold bg-[#182338] text-[#FBE48B]"
+                  >
+                    Kelola Bab Materi
+                  </Link>
+                </div>
+              )}
+            </>
+          ) : enrollment ? (
             <>
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-extrabold">
@@ -213,7 +243,14 @@ export default async function CourseDetailPage({ params }) {
                     </span>
                   </div>
 
-                  {enrollment ? (
+                  {isOwnerOrAdmin ? (
+                    <Link
+                      href={`/courses/${course.id}/learn?content=${item.id}`}
+                      className="text-xs font-extrabold px-3.5 py-1.5 rounded-full bg-[#182338] text-[#FBE48B]"
+                    >
+                      Buka Materi &amp; Diskusi
+                    </Link>
+                  ) : enrollment ? (
                     <Link
                       href={`/courses/${course.id}/learn?content=${item.id}`}
                       className={`text-xs font-extrabold px-3.5 py-1.5 rounded-full transition ${
@@ -226,7 +263,7 @@ export default async function CourseDetailPage({ params }) {
                     </Link>
                   ) : (
                     <span className="text-xs font-semibold text-[#5A657A]">
-                      Terkunci (Daftar dulu)
+                      {isStudent ? "Terkunci (Daftar dulu)" : "Hanya untuk Student"}
                     </span>
                   )}
                 </div>
